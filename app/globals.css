@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #060D0A;
+  --bg-secondary: #0C1A14;
+  --bg-card: #101E17;
+  --bg-border: #1A2E24;
+  --mint: #5EBAA0;
+  --text-primary: #E8F5F1;
+  --text-secondary: #8BA89A;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background-color: #060D0A;
+  color: #E8F5F1;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #0C1A14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1A2E24;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5EBAA0;
+}
+
+/* Card base */
+.mc-card {
+  background: #101E17;
+  border: 1px solid #1A2E24;
+  border-radius: 8px;
+}
+
+/* Status pulse */
+.status-pulse-critical {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
