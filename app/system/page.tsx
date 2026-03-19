@@ -36,6 +36,21 @@ export default function SystemPage() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState("");
   const [logFilter, setLogFilter] = useState("");
+  const [restarting, setRestarting] = useState<"beast" | "nuc" | null>(null);
+  const [restartMsg, setRestartMsg] = useState<string | null>(null);
+
+  const restartGateway = async (target: "beast" | "nuc") => {
+    setRestarting(target);
+    setRestartMsg(null);
+    try {
+      const res = await fetch(`/api/gateway/restart?target=${target}`, { method: "POST" });
+      const json = await res.json();
+      setRestartMsg(json.ok ? `✅ ${target === "beast" ? "Beast" : "NUC"} gateway restarted` : `❌ ${json.error}`);
+    } catch (e) {
+      setRestartMsg(`❌ ${String(e)}`);
+    }
+    setRestarting(null);
+  };
 
   const fetch_ = useCallback(async () => {
     const res = await fetch("/api/system");
@@ -75,6 +90,27 @@ export default function SystemPage() {
 
       {info && (
         <>
+          {/* Gateway restart buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => restartGateway("beast")}
+              disabled={restarting !== null}
+              className="flex items-center gap-2 px-4 py-2 rounded bg-mint/10 border border-mint/30 text-mint text-sm font-medium hover:bg-mint/20 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={restarting === "beast" ? "animate-spin" : ""} />
+              Restart Beast Gateway
+            </button>
+            <button
+              onClick={() => restartGateway("nuc")}
+              disabled={restarting !== null}
+              className="flex items-center gap-2 px-4 py-2 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm font-medium hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw size={14} className={restarting === "nuc" ? "animate-spin" : ""} />
+              Restart NUC Gateway
+            </button>
+            {restartMsg && <span className="text-xs text-text-muted self-center">{restartMsg}</span>}
+          </div>
+
           {/* Gateway status banner */}
           <div className={cn(
             "mc-card p-4 flex items-center gap-3",

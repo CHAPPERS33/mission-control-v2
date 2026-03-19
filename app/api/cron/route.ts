@@ -1,112 +1,52 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
-import { join } from "path";
 
-interface CronJob {
-  id: string;
-  name: string;
-  schedule: string;
-  description: string;
-  lastRun: string | null;
-  nextRun: string | null;
-  status: "healthy" | "warning" | "critical" | "unknown";
-  script: string;
-}
+export const dynamic = "force-dynamic";
 
-// Try to read from workspace AGENTS.md / cron config, fall back to mock
-function getMockJobs(): CronJob[] {
-  const now = Date.now();
-  return [
-    {
-      id: "health-check",
-      name: "Health Check",
-      schedule: "*/5 * * * *",
-      description: "Percy system health sweep — The Beast + services",
-      lastRun: new Date(now - 3 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 2 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "scripts/health-check.js",
-    },
-    {
-      id: "missing-parcels",
-      name: "Missing Parcels Processor",
-      schedule: "*/2 * * * *",
-      description: "Process queued missing parcel images via Gemini OCR",
-      lastRun: new Date(now - 90 * 1000).toISOString(),
-      nextRun: new Date(now + 30 * 1000).toISOString(),
-      status: "healthy",
-      script: "scripts/missing-parcels-processor.js",
-    },
-    {
-      id: "found-parcels",
-      name: "Found Parcels Processor",
-      schedule: "*/2 * * * *",
-      description: "Process found parcel barcode scans + recovery updates",
-      lastRun: new Date(now - 2 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 0 * 1000).toISOString(),
-      status: "healthy",
-      script: "scripts/found-parcels-processor.js",
-    },
-    {
-      id: "atlas-heartbeat",
-      name: "Atlas Heartbeat",
-      schedule: "0 */6 * * *",
-      description: "Atlas strategy review — 6-hourly cycle",
-      lastRun: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "crons/atlas-heartbeat",
-    },
-    {
-      id: "bert-heartbeat",
-      name: "Bert Heartbeat",
-      schedule: "*/30 * * * *",
-      description: "Bert main agent 30-min check cycle",
-      lastRun: new Date(now - 15 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 15 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "crons/bert-heartbeat",
-    },
-    {
-      id: "irene-scout",
-      name: "Irene Opportunity Scout",
-      schedule: "0 */2 * * *",
-      description: "Irene 2-hourly opportunity scan",
-      lastRun: new Date(now - 45 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 75 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "crons/irene-heartbeat",
-    },
-    {
-      id: "depot-open",
-      name: "Depot Open Handler",
-      schedule: "0 6 * * *",
-      description: "AMC depot sub-depot open time ingestion",
-      lastRun: new Date(now - 8 * 60 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 16 * 60 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "scripts/depot-open-handler.js",
-    },
-    {
-      id: "scan-figures",
-      name: "Scan Figures Handler",
-      schedule: "*/5 * * * *",
-      description: "Process inbound scan figure photos from WhatsApp",
-      lastRun: new Date(now - 4 * 60 * 1000).toISOString(),
-      nextRun: new Date(now + 1 * 60 * 1000).toISOString(),
-      status: "healthy",
-      script: "scripts/scan-figures-handler.js",
-    },
-  ];
+const JOBS_PATH = "C:\\Users\\mccha\\.openclaw\\jobs.json";
+
+function parseCronExpr(expr: string): string {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return expr;
+  const [min, hour, , , dow] = parts;
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  if (min.startsWith("*/") && hour === "*")
+    return `Every ${min.slice(2)} min`;
+  if (min === "0" && hour.startsWith("*/"))
+    return `Every ${hour.slice(2)}h`;
+  if (min === "0" && hour !== "*" && dow === "*")
+    return `Daily ${hour.padStart(2, "0")}:00`;
+  if (dow !== "*" && dow !== "1-5" && dow !== "0-5")
+    return `${DAY_NAMES[parseInt(dow)] ?? dow} ${hour.padStart(2, "0")}:${min.padStart(2, "0")}`;
+  return expr;
 }
 
 export async function GET() {
-  const jobs = getMockJobs();
-  const healthy = jobs.filter(j => j.status === "healthy").length;
-  const warning = jobs.filter(j => j.status === "warning").length;
-  const critical = jobs.filter(j => j.status === "critical").length;
-  return NextResponse.json({
-    data: jobs,
-    summary: { total: jobs.length, healthy, warning, critical },
-  });
+  try {
+    const raw = readFileSync(JOBS_PATH);
+    // Strip BOM if present
+    const text = raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf
+      ? raw.slice(3).toString("utf8")
+      : raw.toString("utf8");
+    const data = JSON.parse(text);
+    const jobs = (data.jobs || []).map((j: Record<string, unknown>) => {
+      const scheduleExpr = (j.schedule as Record<string, string>)?.expr || String(j.schedule || "");
+      return {
+        id: j.id,
+        name: j.name,
+        description: j.description || (j.payload as Record<string, string>)?.message?.slice(0, 60) || "",
+        schedule: scheduleExpr,
+        scheduleHuman: parseCronExpr(scheduleExpr),
+        enabled: j.enabled !== false,
+        agentId: j.agentId || null,
+      };
+    });
+    const enabled = jobs.filter((j: { enabled: boolean }) => j.enabled).length;
+    return NextResponse.json({
+      data: jobs,
+      summary: { total: jobs.length, enabled, disabled: jobs.length - enabled },
+    });
+  } catch (err) {
+    return NextResponse.json({ error: String(err), data: [], summary: { total: 0, enabled: 0, disabled: 0 } }, { status: 500 });
+  }
 }

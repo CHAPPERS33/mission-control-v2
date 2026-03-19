@@ -315,10 +315,16 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Priorities from TODO */}
-        <Card title="Priorities" subtitle="From TODO.md — high priority" action={<a href="/todo" className="text-xs text-mint hover:underline">Full list</a>}>
-          <PrioritiesList />
-        </Card>
+        <div className="space-y-4">
+          {/* Priorities from TODO */}
+          <Card title="Priorities" subtitle="From TODO.md — high priority" action={<a href="/todo" className="text-xs text-mint hover:underline">Full list</a>}>
+            <PrioritiesList />
+          </Card>
+          {/* Reddit Feed */}
+          <Card title="Reddit" subtitle="Top posts · editable subreddit">
+            <RedditFeed />
+          </Card>
+        </div>
       </div>
     </div>
   );
@@ -372,5 +378,62 @@ function QuickLink({ href, icon, label, sub }: { href: string; icon: React.React
         <div className="text-xs text-text-muted">{sub}</div>
       </div>
     </a>
+  );
+}
+
+interface RedditPost { id: string; title: string; score: number; author: string; url: string; created_utc: number; }
+
+function RedditFeed() {
+  const [subreddit, setSubreddit] = useState<string>(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("mc_subreddit") || "quittingvaping";
+    return "quittingvaping";
+  });
+  const [input, setInput] = useState(subreddit);
+  const [posts, setPosts] = useState<RedditPost[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/reddit-feed?subreddit=${subreddit}`)
+      .then(r => r.json())
+      .then(data => { setPosts(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [subreddit]);
+
+  const handleChange = () => {
+    const val = input.replace(/^r\//, "").trim();
+    if (val) {
+      setSubreddit(val);
+      if (typeof window !== "undefined") localStorage.setItem("mc_subreddit", val);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-text-muted">r/</span>
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleChange()}
+          className="bg-bg-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none w-40"
+        />
+        <button onClick={handleChange} className="text-xs text-mint hover:underline">Go</button>
+      </div>
+      {loading && <div className="text-xs text-text-muted">Loading...</div>}
+      {!loading && posts.length === 0 && <div className="text-xs text-text-muted">No posts found or subreddit not accessible</div>}
+      <div className="space-y-0">
+        {posts.map((p, i) => (
+          <div key={p.id} className="flex items-start gap-2 py-2 border-b border-bg-border last:border-0">
+            <span className="text-xs text-text-muted w-5 flex-shrink-0">{i + 1}.</span>
+            <div className="flex-1 min-w-0">
+              <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-xs text-text-primary hover:text-mint line-clamp-2">{p.title}</a>
+              <div className="text-xs text-text-muted mt-0.5">▲ {p.score} · u/{p.author}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
