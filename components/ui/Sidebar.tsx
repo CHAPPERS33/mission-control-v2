@@ -13,18 +13,34 @@ import {
   Bot,
   Bell,
   LayoutDashboard,
+  Clock,
+  Puzzle,
+  ListTodo,
+  Monitor,
+  FileText,
+  Terminal,
+  Shield,
+  GitBranch,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/health", label: "System Health", icon: Activity },
-  { href: "/tasks", label: "Task Overview", icon: CheckSquare },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/incubator", label: "Incubator", icon: Lightbulb },
   { href: "/pipeline", label: "Pipeline", icon: TrendingUp },
   { href: "/capital", label: "Capital", icon: DollarSign },
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/command", label: "Command", icon: Terminal },
   { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/west-ham", label: "West Ham ⚒️", icon: Shield },
+  { href: "/cron", label: "Cron Jobs", icon: Clock },
+  { href: "/skills", label: "Skills", icon: Puzzle },
+  { href: "/timeline", label: "Timeline", icon: GitBranch },
+  { href: "/todo", label: "Todo", icon: ListTodo },
+  { href: "/system", label: "System", icon: Monitor },
+  { href: "/notes", label: "Notes", icon: FileText },
 ];
 
 export function Sidebar() {
