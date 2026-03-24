@@ -11,7 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 export interface HealthRow {
   id: string;
   component: string;
-  status: "healthy" | "warning" | "critical" | "unknown";
+  status: "healthy" | "warning" | "critical" | "unknown" | "redirect";
   message: string;
   source: string;
   last_checked: string;
@@ -85,9 +85,9 @@ export function setCache(raw: PercyRaw): void {
   const ramHealth: HealthRow["status"] =
     ram < 0 ? "unknown" : ram < 75 ? "healthy" : ram <= 85 ? "warning" : "critical";
   const amcHealth: HealthRow["status"] =
-    amc >= 200 && amc <= 299 ? "healthy" : amc >= 300 && amc <= 399 ? "warning" : "critical";
+    amc >= 200 && amc <= 299 ? "healthy" : amc === 307 || amc === 308 ? "redirect" : "critical";
   const cirHealth: HealthRow["status"] =
-    cir >= 200 && cir <= 299 ? "healthy" : cir >= 300 && cir <= 399 ? "warning" : "critical";
+    cir >= 200 && cir <= 299 ? "healthy" : cir === 307 || cir === 308 ? "redirect" : "critical";
 
   const gwMessage = raw.downtime_seconds
     ? `Gateway: ${gw} (downtime: ${raw.downtime_seconds}s)`

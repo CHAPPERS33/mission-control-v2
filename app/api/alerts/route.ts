@@ -15,7 +15,7 @@ interface AlertRow {
   id: string;
   type: string;
   source: string;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "warning" | "info" | "redirect";
   message: string;
   created_at: string;
   acknowledged_at: string | null;
@@ -34,6 +34,7 @@ const SUGGESTED_ACTIONS: Record<string, string> = {
   'The Beast (RAM)': 'Restart the gateway — this clears the memory.',
   'AMC DUC App':     'Check Vercel dashboard for deployment errors.',
   'Cirrus App':      'Check the Vercel deployment for this app.',
+  redirect:          'HTTP redirect (307/308) detected — check CDN/routing configuration.',
 };
 
 function getPercyAlerts(): AlertRow[] {
@@ -42,12 +43,12 @@ function getPercyAlerts(): AlertRow[] {
   const alerts: AlertRow[] = [];
 
   for (const row of data) {
-    if (row.status === "warning" || row.status === "critical") {
+    if (row.status === "warning" || row.status === "critical" || row.status === "redirect") {
       alerts.push({
         id: `percy-${row.id}`,
         type: "system_incident",
         source: "Percy",
-        severity: row.status as "warning" | "critical",
+        severity: row.status as "warning" | "critical" | "redirect",
         message: stale
           ? `[STALE] ${row.component} is ${row.status} — last update ${generated_at || "unknown"}`
           : `${row.component} is ${row.status}`,
@@ -145,7 +146,7 @@ export async function GET() {
   }
 
   alerts.sort((a, b) => {
-    const order = { critical: 0, warning: 1, info: 2 };
+    const order = { critical: 0, redirect: 1, warning: 2, info: 3 };
     const sa = order[a.severity] ?? 99;
     const sb = order[b.severity] ?? 99;
     if (sa !== sb) return sa - sb;
