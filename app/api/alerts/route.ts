@@ -24,16 +24,16 @@ interface AlertRow {
 
 // Map component → suggested_action
 const SUGGESTED_ACTIONS: Record<string, string> = {
-  gateway:       'Check Beast power/network. Run `openclaw gateway status` on The Beast. If gateway is down, run `openclaw gateway restart`.',
-  whatsapp:      'Check WhatsApp on phone. If session stale, run `openclaw channels login --channel whatsapp` then restart gateway.',
-  amcducapp:     'Check Vercel dashboard for deployment status. Verify Supabase project is active.',
-  cirrusapp:     'Check Vercel dashboard. Verify Expo/EAS build status.',
-  ram:           'Check for runaway processes on The Beast. Restart gateway if needed.',
-  'OpenClaw Gateway': 'Check Beast power/network. Run `openclaw gateway status` on The Beast. If gateway is down, run `openclaw gateway restart`.',
-  'WhatsApp Relay':   'Check WhatsApp on phone. If session stale, run `openclaw channels login --channel whatsapp` then restart gateway.',
-  'The Beast (RAM)':  'Check for runaway processes on The Beast. Restart gateway if needed.',
-  'AMC DUC App':      'Check Vercel dashboard for deployment status. Verify Supabase project is active.',
-  'Cirrus App':       'Check Vercel dashboard. Verify Expo/EAS build status.',
+  gateway:           'Run `openclaw gateway restart` on The Beast.',
+  whatsapp:          'Restart the gateway — this re-authenticates the WhatsApp session.',
+  amcducapp:         'Check Vercel dashboard for deployment errors.',
+  cirrusapp:         'Check the Vercel deployment for this app.',
+  ram:               'Restart the gateway — this clears the memory.',
+  'OpenClaw Gateway':'Run `openclaw gateway restart` on The Beast.',
+  'WhatsApp Relay':  'Restart the gateway — this re-authenticates the WhatsApp session.',
+  'The Beast (RAM)': 'Restart the gateway — this clears the memory.',
+  'AMC DUC App':     'Check Vercel dashboard for deployment errors.',
+  'Cirrus App':      'Check the Vercel deployment for this app.',
 };
 
 function getPercyAlerts(): AlertRow[] {
