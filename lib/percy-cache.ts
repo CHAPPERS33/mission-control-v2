@@ -85,9 +85,9 @@ export function setCache(raw: PercyRaw): void {
   const ramHealth: HealthRow["status"] =
     ram < 0 ? "unknown" : ram < 75 ? "healthy" : ram <= 85 ? "warning" : "critical";
   const amcHealth: HealthRow["status"] =
-    amc >= 200 && amc <= 299 ? "healthy" : amc === 307 || amc === 308 ? "redirect" : "critical";
+    amc >= 200 && amc <= 299 ? "healthy" : amc === 301 ? "redirect" : amc >= 300 && amc <= 399 ? "warning" : "critical";
   const cirHealth: HealthRow["status"] =
-    cir >= 200 && cir <= 299 ? "healthy" : cir === 307 || cir === 308 ? "redirect" : "critical";
+    cir >= 200 && cir <= 299 ? "healthy" : cir === 307 ? "redirect" : cir >= 300 && cir <= 399 ? "warning" : "critical";
 
   const gwMessage = raw.downtime_seconds
     ? `Gateway: ${gw} (downtime: ${raw.downtime_seconds}s)`
@@ -97,8 +97,8 @@ export function setCache(raw: PercyRaw): void {
     { id: "gateway", component: "OpenClaw Gateway", status: gwHealth, message: gwMessage, source: "Percy", last_checked: ts },
     { id: "whatsapp", component: "WhatsApp Relay", status: waHealth, message: wa === "stalled" ? "WhatsApp relay stalled" : wa === "idle" ? "WhatsApp idle (outside active hours)" : wa === "healthy" ? "Online" : `Status: ${wa}`, source: "Percy", last_checked: ts },
     { id: "ram", component: "The Beast (RAM)", status: ramHealth, message: ram < 0 ? "RAM: unknown" : `RAM ${ram}% used`, source: "Percy", last_checked: ts },
-    { id: "amcducapp", component: "AMC DUC App", status: amcHealth, message: amc >= 200 && amc <= 299 ? `HTTP ${amc} — OK` : `HTTP ${amc}`, source: "Percy", last_checked: ts },
-    { id: "cirrusapp", component: "Cirrus App", status: cirHealth, message: cir >= 200 && cir <= 299 ? `HTTP ${cir} — OK` : `HTTP ${cir}`, source: "Percy", last_checked: ts },
+    { id: "amcducapp", component: "AMC DUC App", status: amcHealth, message: (amc >= 200 && amc <= 299) || amc === 301 ? `HTTP ${amc} — OK` : `HTTP ${amc}`, source: "Percy", last_checked: ts },
+    { id: "cirrusapp", component: "Cirrus App", status: cirHealth, message: (cir >= 200 && cir <= 299) || cir === 307 ? `HTTP ${cir} — OK` : `HTTP ${cir}`, source: "Percy", last_checked: ts },
   ];
 
   // Enrich raw with changes_since_last before storing

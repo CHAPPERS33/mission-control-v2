@@ -24,17 +24,18 @@ interface AlertRow {
 
 // Map component → suggested_action
 const SUGGESTED_ACTIONS: Record<string, string> = {
-  gateway:           'Run `openclaw gateway restart` on The Beast.',
-  whatsapp:          'Restart the gateway — this re-authenticates the WhatsApp session.',
-  amcducapp:         'Check Vercel dashboard for deployment errors.',
-  cirrusapp:         'Check the Vercel deployment for this app.',
-  ram:               'Restart the gateway — this clears the memory.',
-  'OpenClaw Gateway':'Run `openclaw gateway restart` on The Beast.',
-  'WhatsApp Relay':  'Restart the gateway — this re-authenticates the WhatsApp session.',
-  'The Beast (RAM)': 'Restart the gateway — this clears the memory.',
-  'AMC DUC App':     'Check Vercel dashboard for deployment errors.',
-  'Cirrus App':      'Check the Vercel deployment for this app.',
-  redirect:          'HTTP redirect (307/308) detected — check CDN/routing configuration.',
+  gateway:             'Run `openclaw gateway restart` on The Beast.',
+  whatsapp:            'Restart the gateway — this re-authenticates the WhatsApp session.',
+  amcducapp:           'Check Vercel dashboard for deployment errors.',
+  amcducapp_redirect:  'AMC DUC 301 redirect — EXPECTED (HTTP→HTTPS known infrastructure).',
+  cirrusapp:           'Check the Vercel deployment for this app.',
+  cirrusapp_redirect:  'Cirrus 307 redirect — EXPECTED (www redirect is known infrastructure).',
+  ram:                 'Restart the gateway — this clears the memory.',
+  'OpenClaw Gateway':  'Run `openclaw gateway restart` on The Beast.',
+  'WhatsApp Relay':    'Restart the gateway — this re-authenticates the WhatsApp session.',
+  'The Beast (RAM)':  'Restart the gateway — this clears the memory.',
+  'AMC DUC App':      'Check Vercel dashboard for deployment errors.',
+  'Cirrus App':        'Check the Vercel deployment for this app.',
 };
 
 function getPercyAlerts(): AlertRow[] {
@@ -54,7 +55,12 @@ function getPercyAlerts(): AlertRow[] {
           : `${row.component} is ${row.status}`,
         created_at: row.last_checked || now,
         acknowledged_at: null,
-        suggested_action: SUGGESTED_ACTIONS[row.id] ?? SUGGESTED_ACTIONS[row.component] ?? 'Investigate this component.',
+        suggested_action: (() => {
+          if (row.status === "redirect") {
+            return SUGGESTED_ACTIONS[`${row.id}_redirect`] ?? SUGGESTED_ACTIONS[row.id] ?? SUGGESTED_ACTIONS[row.component] ?? "Investigate this redirect.";
+          }
+          return SUGGESTED_ACTIONS[row.id] ?? SUGGESTED_ACTIONS[row.component] ?? "Investigate this component.";
+        })(),
       });
     }
   }
