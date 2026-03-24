@@ -1,3 +1,8 @@
+// DISPATCH GAP: The approve action in the Command Center updates proposal status in proposals.json
+// but does NOT dispatch to any agent. Dispatching requires sessions_send to the agent's live
+// session key, which requires OpenClaw gateway API access not currently exposed to Mission Control.
+// Until a /api/gateway/sessions-send endpoint exists, dispatch remains manual (via Bert on Telegram).
+
 import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";

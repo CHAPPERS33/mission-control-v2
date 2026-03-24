@@ -3,19 +3,22 @@
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { useEffect, useState } from "react";
 
-// Capital Dashboard — Atlas-compiled product performance signals
-const mockMetrics = [
+const BASE_METRICS = [
   {
     product: "Cirrus",
-    active_users: 847,
+    active_users: null as number | null, // loaded live from Supabase waitlist
     conversion_rate: 18.4,
     revenue: 0,
     growth_signal_score: 72,
     stage: "Pre-revenue (MVP)",
     trend: "up",
     period: "Mar 2026",
-    notes: "847 beta signups. Charlie TikTok driving organic. Convert on paid launch.",
+    notes_template: (count: number | null) =>
+      count !== null
+        ? `${count.toLocaleString()} waitlist signups. Charlie TikTok driving organic. Convert on paid launch.`
+        : "Loading waitlist count…",
   },
   {
     product: "AMC DUC App",
@@ -26,7 +29,8 @@ const mockMetrics = [
     stage: "Internal Tooling",
     trend: "stable",
     period: "Mar 2026",
-    notes: "23 active staff users. Zero churn. v2 in planning for Aug 2025.",
+    notes_template: (_: number | null) =>
+      "23 active staff users. Zero churn. v2 in planning for Aug 2026.",
   },
 ];
 
@@ -37,6 +41,25 @@ const trendIcon = (trend: string) => {
 };
 
 export default function CapitalPage() {
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/cirrus-metrics")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.waitlist_count !== null && data.waitlist_count !== undefined) {
+          setWaitlistCount(data.waitlist_count);
+        }
+      })
+      .catch(() => {}); // silently fail — fallback shows "Loading…"
+  }, []);
+
+  const metrics = BASE_METRICS.map((m) => ({
+    ...m,
+    active_users: m.product === "Cirrus" ? waitlistCount : m.active_users,
+    notes: m.notes_template(m.product === "Cirrus" ? waitlistCount : null),
+  }));
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -45,10 +68,13 @@ export default function CapitalPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {mockMetrics.map(metric => (
+        {metrics.map(metric => (
           <Card key={metric.product} title={metric.product} subtitle={metric.stage}>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <MetricCell label="Active Users" value={metric.active_users.toLocaleString()} />
+              <MetricCell
+                label="Waitlist / Users"
+                value={metric.active_users !== null ? metric.active_users.toLocaleString() : "—"}
+              />
               <MetricCell label="Conversion" value={`${metric.conversion_rate}%`} />
               <MetricCell label="Revenue" value={metric.revenue > 0 ? `£${metric.revenue.toLocaleString()}` : "Pre-revenue"} />
               <div className="p-3 bg-bg-secondary rounded border border-bg-border">

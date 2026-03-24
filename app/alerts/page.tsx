@@ -12,6 +12,7 @@ interface AlertRow {
   message: string;
   created_at: string;
   acknowledged_at: string | null;
+  suggested_action?: string;
 }
 
 const severityConfig = {
@@ -93,6 +94,12 @@ export default function AlertsPage() {
                     <span className="text-xs text-text-muted">· {alert.type.replace("_", " ")}</span>
                   </div>
                   <div className="text-sm text-text-primary">{alert.message}</div>
+                  {alert.suggested_action && (
+                    <div className="mt-2 px-3 py-2 bg-bg-secondary rounded border border-border-subtle">
+                      <div className="text-xs text-text-muted font-medium mb-0.5">Suggested action</div>
+                      <div className="text-xs text-text-secondary">{alert.suggested_action}</div>
+                    </div>
+                  )}
                   <div className="text-xs text-text-muted mt-1">{relativeTime(alert.created_at)}</div>
                 </div>
                 {alert.acknowledged_at && (

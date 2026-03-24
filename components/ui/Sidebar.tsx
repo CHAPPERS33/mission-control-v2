@@ -21,12 +21,14 @@ import {
   Terminal,
   Shield,
   GitBranch,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/health", label: "System Health", icon: Activity },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/tokens", label: "Tokens", icon: Zap },
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/incubator", label: "Incubator", icon: Lightbulb },
   { href: "/pipeline", label: "Pipeline", icon: TrendingUp },

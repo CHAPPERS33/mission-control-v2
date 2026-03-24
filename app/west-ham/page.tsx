@@ -25,28 +25,32 @@ interface LeagueRow {
   points: number;
 }
 
+// Data sourced from BBC Sport / Wikipedia — updated 19 Mar 2026
 const FIXTURES: Fixture[] = [
-  { date: "2026-03-22", opponent: "Manchester City", venue: "H", competition: "Premier League" },
-  { date: "2026-03-29", opponent: "Arsenal", venue: "A", competition: "Premier League" },
-  { date: "2026-04-05", opponent: "Brentford", venue: "H", competition: "Premier League" },
-  { date: "2026-04-12", opponent: "Fulham", venue: "A", competition: "Premier League" },
-  { date: "2026-04-19", opponent: "Crystal Palace", venue: "H", competition: "Premier League" },
+  { date: "2026-03-22", opponent: "Aston Villa", venue: "A", competition: "Premier League" },
+  { date: "2026-04-10", opponent: "Wolverhampton", venue: "H", competition: "Premier League" },
+  { date: "2026-04-20", opponent: "Crystal Palace", venue: "A", competition: "Premier League" },
+  { date: "2026-04-25", opponent: "Everton", venue: "H", competition: "Premier League" },
+  { date: "2026-05-02", opponent: "Brentford", venue: "A", competition: "Premier League" },
 ];
 
 const RESULTS: Fixture[] = [
-  { date: "2026-03-15", opponent: "Everton", venue: "H", competition: "Premier League", result: "W", score: "2–0" },
-  { date: "2026-03-08", opponent: "Wolves", venue: "A", competition: "Premier League", result: "D", score: "1–1" },
-  { date: "2026-03-01", opponent: "Leicester", venue: "H", competition: "Premier League", result: "W", score: "3–1" },
-  { date: "2026-02-22", opponent: "Tottenham", venue: "A", competition: "Premier League", result: "L", score: "0–2" },
-  { date: "2026-02-15", opponent: "Southampton", venue: "H", competition: "Premier League", result: "W", score: "4–1" },
+  { date: "2026-03-14", opponent: "Manchester City", venue: "H", competition: "Premier League", result: "D", score: "1–1" },
+  { date: "2026-01-24", opponent: "Sunderland", venue: "H", competition: "Premier League", result: "W", score: "3–1" },
+  { date: "2026-01-17", opponent: "Tottenham", venue: "A", competition: "Premier League", result: "W", score: "2–1" },
+  { date: "2026-01-06", opponent: "Nottm Forest", venue: "H", competition: "Premier League", result: "L", score: "1–2" },
+  { date: "2026-01-03", opponent: "Wolves", venue: "A", competition: "Premier League", result: "L", score: "0–3" },
 ];
 
+// Table as of 16 Mar 2026 (source: Premier League / BBC Sport)
 const TABLE: LeagueRow[] = [
-  { position: 1, team: "Liverpool", played: 28, won: 20, drawn: 5, lost: 3, gd: 42, points: 65 },
-  { position: 2, team: "Arsenal", played: 28, won: 18, drawn: 6, lost: 4, gd: 31, points: 60 },
-  { position: 3, team: "Man City", played: 28, won: 16, drawn: 5, lost: 7, gd: 22, points: 53 },
-  { position: 4, team: "Chelsea", played: 28, won: 15, drawn: 6, lost: 7, gd: 18, points: 51 },
-  { position: 9, team: "West Ham ⚒️", played: 28, won: 11, drawn: 7, lost: 10, gd: 2, points: 40 },
+  { position: 1, team: "Liverpool", played: 31, won: 21, drawn: 7, lost: 3, gd: 39, points: 70 },
+  { position: 2, team: "Arsenal", played: 30, won: 18, drawn: 7, lost: 5, gd: 28, points: 61 },
+  { position: 16, team: "Tottenham", played: 30, won: 7, drawn: 9, lost: 14, gd: -7, points: 30 },
+  { position: 17, team: "Nottm Forest", played: 30, won: 7, drawn: 8, lost: 15, gd: -15, points: 29 },
+  { position: 18, team: "West Ham ⚒️", played: 30, won: 7, drawn: 8, lost: 15, gd: -19, points: 29 },
+  { position: 19, team: "Burnley", played: 30, won: 4, drawn: 8, lost: 18, gd: -26, points: 20 },
+  { position: 20, team: "Wolves", played: 31, won: 3, drawn: 8, lost: 20, gd: -30, points: 17 },
 ];
 
 const resultColor: Record<string, string> = {
@@ -76,8 +80,9 @@ export default function WestHamPage() {
           </h1>
           <p className="text-xs text-text-muted mt-0.5">Irons tracker · Premier League 2025/26</p>
         </div>
-        <div className="text-xs text-text-muted font-mono">
-          9th · 40 pts
+        <div className="text-right">
+          <div className="text-xs font-mono text-status-critical font-semibold">18th · 29 pts</div>
+          <div className="text-xs text-text-muted">⚠️ Relegation zone</div>
         </div>
       </div>
 
