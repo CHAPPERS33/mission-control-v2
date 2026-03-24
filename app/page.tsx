@@ -204,8 +204,8 @@ export default function DashboardPage() {
       {/* Header with greeting + clock */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">{greeting()}, Mark<\/h1>
-          <p className="text-xs text-text-muted mt-0.5">Mission Control · Last refresh: {lastRefresh}</p>
+          <h1 className="text-xl font-semibold text-text-primary">{greeting()}, Mark</h1>
+          <p className="text-xs text-text-muted mt-0.5">Mission Control - Last refresh: {lastRefresh}</p>
         </div>
         <LiveClock />
       </div>
