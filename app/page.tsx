@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { relativeTime, statusDot, cn } from "@/lib/utils";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+const WaitlistWidget = dynamic(() => import("@/components/WaitlistWidget"), { ssr: false });
 import { Activity, CheckSquare, FolderOpen, Bot, AlertTriangle, TrendingUp, Edit2, Check, X, Zap } from "lucide-react";
 
 // Error boundary — prevents one crashing widget from taking down the whole dashboard
@@ -375,6 +377,11 @@ export default function DashboardPage() {
 
       {/* Token Usage Widget */}
       <TokenWidget data={tokenData} />
+
+      {/* Cirrus Waitlist Widget */}
+      <WidgetBoundary name="waitlist">
+        <WaitlistWidget />
+      </WidgetBoundary>
 
       {/* Bottom row: quick links + priorities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
