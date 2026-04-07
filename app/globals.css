@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -21,7 +21,7 @@
 html, body {
   background-color: #060D0A;
   color: #E8F5F1;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: 'Inter', 'JetBrains Mono', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -46,14 +46,253 @@ html, body {
   background: #101E17;
   border: 1px solid #1A2E24;
   border-radius: 8px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* Status pulse */
+/* Status color contract shared by StatusBadge + agent health UI */
+.bg-status-healthy {
+  background-color: #2ECC71;
+}
+.bg-status-warning {
+  background-color: #F39C12;
+}
+.bg-status-critical {
+  background-color: #E74C3C;
+}
+.bg-status-unknown {
+  background-color: #6B7280;
+}
+
+.text-status-healthy {
+  color: #86EFAC;
+}
+.text-status-warning {
+  color: #FCD34D;
+}
+.text-status-critical {
+  color: #FCA5A5;
+}
+.text-status-unknown {
+  color: #9CA3AF;
+}
+
+.status-bg-healthy {
+  background-color: rgba(46, 204, 113, 0.10);
+}
+.status-bg-warning {
+  background-color: rgba(243, 156, 18, 0.10);
+}
+.status-bg-critical {
+  background-color: rgba(231, 76, 60, 0.10);
+}
+.status-bg-unknown {
+  background-color: rgba(107, 114, 128, 0.15);
+}
+
+.status-border-healthy {
+  border-color: rgba(46, 204, 113, 0.30);
+}
+.status-border-warning {
+  border-color: rgba(243, 156, 18, 0.30);
+}
+.status-border-critical {
+  border-color: rgba(231, 76, 60, 0.30);
+}
+.status-border-unknown {
+  border-color: rgba(107, 114, 128, 0.30);
+}
+
+/* Status pulse — critical only */
 .status-pulse-critical {
-  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-critical 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-@keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100vh); }
+/* Live dot glow */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.4;
+  animation: live-glow 2s ease-in-out infinite;
+}
+@keyframes live-glow {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Card glow on fresh update */
+.card-glow-fresh {
+  border-color: rgba(94, 186, 160, 0.4);
+  box-shadow: 0 0 12px rgba(94, 186, 160, 0.08), inset 0 0 20px rgba(94, 186, 160, 0.03);
+}
+
+/* Priority card edge glow - blocked */
+.priority-blocked {
+  border-left: 3px solid #E74C3C;
+}
+
+/* Priority card edge glow - approved/waiting */
+.priority-waiting {
+  border-left: 3px solid #F39C12;
+}
+
+/* Priority card edge glow - active/execution */
+.priority-active {
+  border-left: 3px solid #2ECC71;
+}
+
+/* Proof violet accent */
+.proof-violet {
+  color: #A78BFA;
+}
+.proof-violet-bg {
+  background-color: rgba(167, 139, 250, 0.1);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+/* Stale timestamp */
+.timestamp-stale {
+  opacity: 0.5;
+}
+.timestamp-fresh {
+  opacity: 1;
+}
+
+/* Metric card hover lift */
+.metric-card-hover {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.metric-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-color: rgba(94, 186, 160, 0.4);
+}
+
+/* Section header with scan-line accent */
+.section-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-header::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, #1A2E24, transparent);
+}
+
+/* Agent card edge accents */
+.agent-card-blocked {
+  border-left: 3px solid #E74C3C;
+}
+.agent-card-waiting {
+  border-left: 3px solid #F39C12;
+}
+.agent-card-review {
+  border-left: 3px solid #A78BFA;
+}
+
+/* Agent card hover */
+.agent-card-hover {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.15s ease;
+}
+.agent-card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border-color: rgba(94, 186, 160, 0.3);
+}
+
+/* Ambient ping — header dot */
+.ambient-ping {
+  position: relative;
+}
+.ambient-ping::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: #5EBAA0;
+  opacity: 0;
+  animation: ambient-ring 3s ease-out infinite;
+}
+@keyframes ambient-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Warning pulse for needs-mark items */
+.status-pulse-warning {
+  animation: pulse-warning 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Needs-Mark banner */
+.needs-mark-banner {
+  border-color: rgba(243, 156, 18, 0.35);
+  background: linear-gradient(135deg, rgba(243, 156, 18, 0.08), rgba(16, 30, 23, 0.95));
+}
+
+/* Agent tile fresh highlight */
+.agent-tile-fresh {
+  background: linear-gradient(135deg, rgba(94, 186, 160, 0.06), rgba(16, 30, 23, 0.98));
+}
+
+/* Scanline overlay — very subtle */
+.scanline-overlay {
+  position: relative;
+}
+.scanline-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(94, 186, 160, 0.015) 3px,
+    rgba(94, 186, 160, 0.015) 4px
+  );
+}
+
+/* Radar sweep */
+.radar-sweep::before {
+  content: '';
+  position: absolute;
+  top: -60%;
+  right: -20%;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(94, 186, 160, 0.06) 40deg, transparent 80deg);
+  animation: sweep 8s linear infinite;
+  pointer-events: none;
+}
+@keyframes sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Fade-in */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out both;
+}
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
