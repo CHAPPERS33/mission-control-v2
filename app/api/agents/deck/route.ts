@@ -134,8 +134,10 @@ export async function GET() {
       // Get active task for this agent (execution > blocked > approved)
       const agentTasks = (tasks ?? []).filter((t) => t.agent_id === hb.agent_id);
       const activeTask = agentTasks.find((t) => t.stage === "execution")
+        ?? agentTasks.find((t) => t.stage === "peer_review")
         ?? agentTasks.find((t) => t.stage === "blocked")
         ?? agentTasks.find((t) => t.stage === "approved")
+        ?? agentTasks.find((t) => t.stage === "plan")
         ?? null;
 
       const lastSeenAt = hb.last_heartbeat ?? hb.updated_at ?? null;
@@ -147,9 +149,7 @@ export async function GET() {
       // otherwise fall back to freshness + task stage derivation.
       const derivedStatus = (() => {
         const metaStatus = metadata.agentStatus as string | undefined;
-        console.log(`[deck] ${hb.agent_id}: metadata=${JSON.stringify(metadata)}, metaStatus=${metaStatus}, freshness=${freshness}`);
         if (metaStatus && ['active', 'planning', 'reviewing', 'waiting_mark', 'blocked', 'idle', 'offline', 'unknown'].includes(metaStatus)) {
-          console.log(`[deck] ${hb.agent_id}: using metaStatus=${metaStatus}`);
           return metaStatus as AgentStatus;
         }
         // Freshness + task stage derivation
