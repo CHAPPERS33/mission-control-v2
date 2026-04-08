@@ -70,6 +70,8 @@ interface AgentListItem {
   linkedOpportunity: AgentOpportunity | null;
   recentActions: AgentAction[];
   lastSeenAt: string;
+  model?: string | null;
+  owner?: string | null;
 }
 
 interface AgentsDeckPayload {
@@ -316,6 +318,25 @@ export default function AgentsPage() {
                   </div>
                 )}
               </div>
+
+              {(agent.owner || agent.model || agent.lastSeenAt) && (
+                <div className="px-4 pt-3">
+                  <div className="grid grid-cols-1 gap-2 rounded-lg border border-bg-border/60 bg-black/10 px-3 py-2 text-[11px] text-text-muted sm:grid-cols-3">
+                    <div>
+                      <span className="uppercase tracking-wide text-text-muted/70">Owner</span>
+                      <div className="mt-0.5 text-text-secondary">{agent.owner || "—"}</div>
+                    </div>
+                    <div>
+                      <span className="uppercase tracking-wide text-text-muted/70">Model</span>
+                      <div className="mt-0.5 truncate text-text-secondary">{agent.model || "—"}</div>
+                    </div>
+                    <div>
+                      <span className="uppercase tracking-wide text-text-muted/70">Last heartbeat</span>
+                      <div className="mt-0.5 text-text-secondary">{relativeTime(agent.lastSeenAt)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Latest proof */}
               {agent.latestProof && (
