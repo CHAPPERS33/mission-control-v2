@@ -147,7 +147,9 @@ export async function GET() {
       // otherwise fall back to freshness + task stage derivation.
       const derivedStatus = (() => {
         const metaStatus = metadata.agentStatus as string | undefined;
+        console.log(`[deck] ${hb.agent_id}: metadata=${JSON.stringify(metadata)}, metaStatus=${metaStatus}, freshness=${freshness}`);
         if (metaStatus && ['active', 'planning', 'reviewing', 'waiting_mark', 'blocked', 'idle', 'offline', 'unknown'].includes(metaStatus)) {
+          console.log(`[deck] ${hb.agent_id}: using metaStatus=${metaStatus}`);
           return metaStatus as AgentStatus;
         }
         // Freshness + task stage derivation
