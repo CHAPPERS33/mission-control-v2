@@ -43,7 +43,7 @@ export default function AlertsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className=\"flex-1\">
+        <div className="flex-1">
           <h1 className="text-xl font-semibold text-text-primary">Alert System</h1>
           <p className="text-xs text-text-muted mt-0.5">Percy generates system alerts · 15s refresh</p>
         </div>
