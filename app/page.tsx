@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import WaitlistWidget from "@/components/WaitlistWidget";
 import { cn, relativeTime } from "@/lib/utils";
 
 interface CommandDeckAgent {
@@ -510,6 +511,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="space-y-4 xl:col-span-3">
+          <WaitlistWidget />
+
           <Card
             title="Needs Mark queue"
             subtitle="Human intervention only"

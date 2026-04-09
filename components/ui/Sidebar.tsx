@@ -22,6 +22,7 @@ import {
   Shield,
   GitBranch,
   Zap,
+  Users,
 } from "lucide-react";
 
 const navItems = [
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/incubator", label: "Incubator", icon: Lightbulb },
   { href: "/pipeline", label: "Pipeline", icon: TrendingUp },
   { href: "/capital", label: "Capital", icon: DollarSign },
+  { href: "/waitlist", label: "Waitlist", icon: Users },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/command", label: "Command", icon: Terminal },
   { href: "/alerts", label: "Alerts", icon: Bell },

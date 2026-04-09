@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface WaitlistEntry {
   email: string;
@@ -8,12 +9,16 @@ interface WaitlistEntry {
   source: string;
   joinedAt: string;
   isNew: boolean;
+  isThisWeek: boolean;
 }
 
 interface WaitlistData {
   total: number;
   newToday: number;
+  newThisWeek: number;
+  sourceBreakdown: Record<string, number>;
   recent: WaitlistEntry[];
+  generatedAt: string;
 }
 
 function timeAgo(iso: string): string {
@@ -33,6 +38,10 @@ function maskEmail(email: string): string {
   return `${visible}@${domain}`;
 }
 
+function formatSource(source: string): string {
+  return source.replace(/_/g, ' ');
+}
+
 export default function WaitlistWidget() {
   const [data, setData] = useState<WaitlistData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +49,7 @@ export default function WaitlistWidget() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch('/api/waitlist');
+      const res = await fetch('/api/waitlist', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
@@ -54,75 +63,105 @@ export default function WaitlistWidget() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000); // refresh every minute
+    const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, []);
 
+  const sourceEntries = data ? Object.entries(data.sourceBreakdown).sort((a, b) => b[1] - a[1]) : [];
+
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-white font-semibold text-sm">Cirrus Waitlist</h3>
-        <span className="text-xs text-gray-500">cirrusapp.co.uk</span>
+    <div className="mc-card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Cirrus Waitlist</h3>
+          <p className="mt-1 text-xs text-text-muted">Live from Cirrus Supabase waitlist table</p>
+        </div>
+        <Link href="/waitlist" className="text-xs font-medium text-mint hover:text-mint-bright">
+          Open view
+        </Link>
       </div>
 
-      {loading && (
-        <div className="text-gray-500 text-sm">Loading...</div>
-      )}
-
-      {error && (
-        <div className="text-red-400 text-sm">Error: {error}</div>
-      )}
+      {loading && <div className="text-sm text-text-muted">Loading waitlist…</div>}
+      {error && <div className="text-sm text-status-critical">Error: {error}</div>}
 
       {data && (
         <>
-          {/* Stats row */}
-          <div className="flex gap-4 mb-5">
-            <div className="flex-1 bg-gray-800 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-white">{data.total}</div>
-              <div className="text-xs text-gray-400 mt-1">Total signups</div>
-            </div>
-            <div className={`flex-1 rounded-lg p-3 text-center ${data.newToday > 0 ? 'bg-emerald-900/40 border border-emerald-700/50' : 'bg-gray-800'}`}>
-              <div className={`text-2xl font-bold ${data.newToday > 0 ? 'text-emerald-400' : 'text-white'}`}>
-                {data.newToday}
-              </div>
-              <div className="text-xs text-gray-400 mt-1">New today</div>
-            </div>
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <StatCell label="Total" value={String(data.total)} />
+            <StatCell label="Today" value={String(data.newToday)} highlight={data.newToday > 0} />
+            <StatCell label="This week" value={String(data.newThisWeek)} highlight={data.newThisWeek > 0} />
           </div>
 
-          {/* Recent signups */}
-          <div className="space-y-2">
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-2">Recent signups</div>
-            {data.recent.length === 0 && (
-              <div className="text-gray-500 text-sm">No signups yet</div>
-            )}
-            {data.recent.map((entry, i) => (
-              <div
-                key={i}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                  entry.isNew
-                    ? 'bg-emerald-900/30 border border-emerald-700/40'
-                    : 'bg-gray-800/60'
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {entry.isNew && (
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-900/60 px-1.5 py-0.5 rounded shrink-0">
-                      NEW
-                    </span>
-                  )}
-                  <span className="text-gray-300 text-sm font-mono truncate">
-                    {maskEmail(entry.email)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <span className="text-xs text-gray-500">#{entry.position}</span>
-                  <span className="text-xs text-gray-500">{timeAgo(entry.joinedAt)}</span>
-                </div>
+          {sourceEntries.length > 0 && (
+            <div className="mb-5">
+              <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-text-muted">Source breakdown</div>
+              <div className="space-y-2">
+                {sourceEntries.map(([source, count]) => {
+                  const percent = data.total > 0 ? Math.round((count / data.total) * 100) : 0;
+                  return (
+                    <div key={source} className="rounded-lg border border-bg-border bg-bg-card/70 px-3 py-2.5">
+                      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium text-text-primary capitalize">{formatSource(source)}</span>
+                        <span className="text-text-muted">{count} · {percent}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-black/20">
+                        <div className="h-full rounded-full bg-mint" style={{ width: `${percent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-text-muted">Recent signups</div>
+            <div className="space-y-2">
+              {data.recent.length === 0 && <div className="text-sm text-text-muted">No signups yet</div>}
+              {data.recent.slice(0, 8).map((entry, i) => (
+                <div
+                  key={`${entry.email}-${entry.joinedAt}-${i}`}
+                  className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${
+                    entry.isNew
+                      ? 'border border-mint/30 bg-mint/10'
+                      : 'border border-bg-border bg-bg-card/70'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {entry.isNew && (
+                        <span className="rounded bg-mint/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-mint-bright">
+                          New
+                        </span>
+                      )}
+                      <span className="truncate font-mono text-sm text-text-primary">{maskEmail(entry.email)}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-text-muted capitalize">
+                      {formatSource(entry.source)} · {timeAgo(entry.joinedAt)}
+                    </div>
+                  </div>
+                  <div className="ml-3 shrink-0 text-xs text-text-muted">#{entry.position}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function StatCell({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        highlight ? 'border-mint/25 bg-mint/10' : 'border-bg-border bg-bg-card/70'
+      }`}
+    >
+      <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold font-mono ${highlight ? 'text-mint-bright' : 'text-text-primary'}`}>
+        {value}
+      </div>
     </div>
   );
 }
