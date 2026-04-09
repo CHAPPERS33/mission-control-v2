@@ -1,586 +1,672 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState, useCallback, Component, ReactNode } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  Bot,
+  CheckSquare,
+  ShieldCheck,
+  FileText,
+  Radar,
+  ArrowRight,
+  Clock3,
+  Sparkles,
+  TriangleAlert,
+  Wifi,
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { relativeTime, statusDot, cn } from "@/lib/utils";
-import Link from "next/link";
-import dynamic from "next/dynamic";
-const WaitlistWidget = dynamic(() => import("@/components/WaitlistWidget"), { ssr: false });
-import { Activity, CheckSquare, FolderOpen, Bot, AlertTriangle, TrendingUp, Edit2, Check, X, Zap } from "lucide-react";
+import { cn, relativeTime } from "@/lib/utils";
 
-// Error boundary — prevents one crashing widget from taking down the whole dashboard
-interface WidgetBoundaryState { hasError: boolean; error: string; }
-class WidgetBoundary extends Component<{ name: string; children: ReactNode }, WidgetBoundaryState> {
-  constructor(props: { name: string; children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: "" };
-  }
-  static getDerivedStateFromError(e: unknown) {
-    return { hasError: true, error: String(e) };
-  }
-  componentDidCatch(e: unknown, _info: unknown) {
-    console.error("[widget:" + this.props.name + "] crashed:", e);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="mc-card p-4 text-center">
-          <div className="text-xs text-status-warning font-medium">Widget error</div>
-          <div className="text-xs text-text-muted mt-1">{this.props.name}</div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
+interface CommandDeckAgent {
+  id: string;
+  name: string;
+  role: string;
+  currentTask: string | null;
+  freshnessMinutes: number | null;
+  freshnessLabel: string;
+  status: string;
+  health: string;
+  proofCount: number;
+  lastSeenAt: string;
 }
 
-interface HealthRow { id: string; component: string; status: string; message: string; last_checked: string; source: string; }
-interface AgentRow { id: string; name: string; role: string; current_task: string | null; last_activity: string; online: boolean; heartbeat_status: string; }
-interface TaskCounts { active: number; blocked: number; completed: number; }
-interface AlertRow { id: string; type: string; severity: string; message: string; created_at: string; source: string; }
-interface WeatherData { temp: string; feelsLike: string; desc: string; humidity: string; windKmph: string; location: string; icon: string; error?: string; }
-interface TokenData {
+interface CommandDeckPriority {
+  id: string;
+  title: string;
+  owner: string | null;
+  status: string;
+  whyNow: string;
+  action: string;
+  updatedAt: string;
+}
+
+interface CommandDeckActivity {
+  id: string;
+  timestamp: string;
+  type: string;
+  message: string;
   source: string;
-  is_estimate: boolean;
-  partial: boolean;
-  cache_age_ms: number;
-  error?: string;
-  today: {
-    date: string;
-    tokens_in: number;
-    tokens_out: number;
-    tokens_cached: number;
-    tokens_total: number;
-    cost_usd: number;
-    session_count: number;
-    most_expensive_session: { session_id: string; agent: string; model: string; cost_usd: number; tokens_total: number; } | null;
-  };
-  by_agent: Array<{ agent: string; model: string; provider: string; tokens_in: number; tokens_out: number; tokens_total: number; cost_usd: number; session_count: number; }>;
+  needsMark: boolean;
 }
-interface ActivityEntry { id: string; timestamp: string; type: string; message: string; source: string; }
-interface ProposalCounts { pending: number; total: number; }
-interface TodoCounts { pending: number; high: number; }
+
+interface NeedsMarkItem {
+  id: string;
+  title: string;
+  requestedBy: string;
+  category: string;
+  reason: string;
+  recommendedAction: string;
+  urgency: string;
+  createdAt: string;
+}
+
+interface ProofItem {
+  id: string;
+  title: string;
+  type: string;
+  relatedTo: string;
+  timestamp: string;
+  path: string;
+  hasMore?: boolean;
+}
+
+interface RuntimeSummary {
+  overall: string;
+  onlineAgents: number;
+  staleAgents: number;
+  blockedTasks: number;
+  approvalsWaiting: number;
+  generatedAt: string;
+}
+
+interface CommandDeckPayload {
+  generatedAt: string;
+  agents: CommandDeckAgent[];
+  priorities: CommandDeckPriority[];
+  activity: CommandDeckActivity[];
+  needsMark: NeedsMarkItem[];
+  proofFeed: {
+    total: number;
+    latest: ProofItem[];
+    hasMore: boolean;
+  };
+  runtime: RuntimeSummary;
+  taskSummary: {
+    active: number;
+    blocked: number;
+    queued: number;
+    completed: number;
+    pendingTodo: number;
+  };
+}
+
+const EMPTY_PAYLOAD: CommandDeckPayload = {
+  generatedAt: new Date(0).toISOString(),
+  agents: [],
+  priorities: [],
+  activity: [],
+  needsMark: [],
+  proofFeed: { total: 0, latest: [], hasMore: false },
+  runtime: {
+    overall: "unknown",
+    onlineAgents: 0,
+    staleAgents: 0,
+    blockedTasks: 0,
+    approvalsWaiting: 0,
+    generatedAt: new Date(0).toISOString(),
+  },
+  taskSummary: { active: 0, blocked: 0, queued: 0, completed: 0, pendingTodo: 0 },
+};
 
 function greeting(): string {
-  const h = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", hour: "numeric", hour12: false });
-  const hr = parseInt(h);
-  if (hr >= 5 && hr < 12) return "Good morning";
-  if (hr >= 12 && hr < 17) return "Good afternoon";
-  if (hr >= 17 && hr < 21) return "Good evening";
+  const hour = Number(
+    new Date().toLocaleString("en-GB", {
+      timeZone: "Europe/London",
+      hour: "2-digit",
+      hour12: false,
+    })
+  );
+
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 22) return "Good evening";
   return "Working late";
 }
 
-function LiveClock() {
-  const [time, setTime] = useState("");
-  const [date, setDate] = useState("");
+function missionNarrative(payload: CommandDeckPayload): string {
+  if (payload.priorities[0]?.title) {
+    return `${payload.priorities[0].title} is top of the board. ${payload.needsMark.length} item${payload.needsMark.length === 1 ? "" : "s"} need Mark. ${payload.runtime.onlineAgents}/${payload.agents.length} agents are visible.`;
+  }
 
-  useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      setTime(now.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", second: "2-digit" }));
-      setDate(now.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" }));
-    };
-    update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
-  }, []);
+  return `${payload.taskSummary.active} active priorities, ${payload.needsMark.length} waiting on Mark, ${payload.runtime.onlineAgents}/${payload.agents.length} agents visible.`;
+}
 
-  return (
-    <div className="text-right">
-      <div className="text-2xl font-mono font-semibold text-text-primary tabular-nums">{time}</div>
-      <div className="text-xs text-text-muted mt-0.5">{date}</div>
-    </div>
-  );
+function urgencyClass(urgency: string): string {
+  if (urgency === "high") return "text-status-critical";
+  if (urgency === "medium") return "text-status-warning";
+  return "text-text-secondary";
+}
+
+function statusLabel(status: string): string {
+  return status.replace(/_/g, " ");
+}
+
+function priorityCardClass(status: string): string {
+  if (status === "blocked") return "priority-blocked";
+  if (status === "approved") return "priority-waiting";
+  return "priority-active";
+}
+
+function freshnessMinutesAgo(timestamp: string): number {
+  return Math.max(0, Math.round((Date.now() - new Date(timestamp).getTime()) / 60000));
+}
+
+function isRecentActivity(timestamp: string): boolean {
+  return freshnessMinutesAgo(timestamp) <= 10;
+}
+
+function isFreshPriority(updatedAt: string): boolean {
+  return freshnessMinutesAgo(updatedAt) <= 15;
+}
+
+function runtimeAccent(overall: string): string {
+  if (overall === "critical") return "border-status-critical/40 bg-status-critical/10";
+  if (overall === "warning") return "border-status-warning/40 bg-status-warning/10";
+  return "border-mint/30 bg-mint/10";
+}
+
+function healthDotClass(health: string): string {
+  if (health === "critical") return "bg-status-critical status-pulse-critical";
+  if (health === "warning") return "bg-status-warning";
+  if (health === "healthy") return "bg-status-healthy live-dot";
+  return "bg-status-unknown";
 }
 
 export default function DashboardPage() {
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [taskCounts, setTaskCounts] = useState<TaskCounts>({ active: 0, blocked: 0, completed: 0 });
-  const [alerts, setAlerts] = useState<AlertRow[]>([]);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [activity, setActivity] = useState<ActivityEntry[]>([]);
-  const [propCounts, setPropCounts] = useState<ProposalCounts>({ pending: 0, total: 0 });
-  const [todoCounts, setTodoCounts] = useState<TodoCounts>({ pending: 0, high: 0 });
-  const [lastRefresh, setLastRefresh] = useState("");
+  const [payload, setPayload] = useState<CommandDeckPayload>(EMPTY_PAYLOAD);
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState("--:--:--");
 
-  // localStorage cache for health data — survives Vercel cold-starts
-  // Handles BOTH old format (flat HealthRow[]) and new format ({ data, generatedAt })
-  const HEALTH_LS = "mc-health-cache";
-  const cachedHealth = (() => {
-    if (typeof window === "undefined") return null;
+  const fetchDeck = useCallback(async () => {
     try {
-      const raw = localStorage.getItem(HEALTH_LS);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed as HealthRow[];                          // old format
-      if (parsed && Array.isArray(parsed.data)) return parsed.data as HealthRow[];     // new {data, generatedAt} format
-      return null;
-    } catch { return null; }
-  })();
-  const [health, setHealth] = useState<HealthRow[]>(cachedHealth ?? []);
-
-  // MRR state (editable, persisted in localStorage)
-  const [tokenData, setTokenData] = useState<TokenData | null>(null);
-  const [mrr, setMrr] = useState<number>(0);
-  const [editingMrr, setEditingMrr] = useState(false);
-  const [mrrInput, setMrrInput] = useState("");
-
-  // Goal countdown (days to financial freedom target)
-  const GOAL_DATE = "2027-01-01";
-  const daysToGoal = Math.ceil((new Date(GOAL_DATE).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-  useEffect(() => {
-    const stored = localStorage.getItem("mc-mrr");
-    if (stored) setMrr(parseFloat(stored));
-  }, []);
-
-  const saveMrr = () => {
-    const val = parseFloat(mrrInput);
-    if (!isNaN(val)) {
-      setMrr(val);
-      localStorage.setItem("mc-mrr", String(val));
-    }
-    setEditingMrr(false);
-  };
-
-  const fetchAll = useCallback(async () => {
-    // CRITICAL: wrap entire fetch in try/catch so one failing API cannot crash the dashboard
-    try {
-      const [h, a, t, al, act, p, td, tok] = await Promise.all([
-        fetch("/api/health").then(r => r.json()).catch(() => ({ data: [], stale: true, generated_at: null })),
-        fetch("/api/agents").then(r => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/tasks").then(r => r.json()).catch(() => ({ counts: { active: 0, blocked: 0, completed: 0 } })),
-        fetch("/api/alerts").then(r => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/activity").then(r => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/proposals").then(r => r.json()).catch(() => ({ counts: { pending: 0, total: 0 } })),
-        fetch("/api/workspace/todo").then(r => r.json()).catch(() => ({ counts: { pending: 0, high: 0 } })),
-        fetch("/api/tokens").then(r => r.json()).catch(() => null),
-      ]);
-      setHealth(h?.data || []);
-      // Save in the same shape that /health page expects: { data: HealthRow[], generatedAt: string|null }
-      if (h?.data && h.data.length >= 2) {
-        try { localStorage.setItem(HEALTH_LS, JSON.stringify({ data: h.data, generatedAt: h.generated_at ?? null })); } catch {}
-      }
-      setAgents(a?.data || []);
-      setTaskCounts(t?.counts || { active: 0, blocked: 0, completed: 0 });
-      setAlerts(al?.data || []);
-      setActivity(act?.data || []);
-      setPropCounts({ pending: p?.counts?.pending || 0, total: p?.counts?.total || 0 });
-      setTodoCounts({ pending: td?.counts?.pending || 0, high: td?.counts?.high || 0 });
-      if (tok) setTokenData(tok);
-    } catch (err) {
-      // Defensive: silently ignore fetch failures - UI shows last known good state
-      console.warn("[dashboard] fetchAll error:", err);
+      const response = await fetch("/api/command-deck", { cache: "no-store" });
+      const data = (await response.json()) as CommandDeckPayload;
+      setPayload(data);
+    } catch {
+      setPayload(EMPTY_PAYLOAD);
     } finally {
-      setLastRefresh(new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/London" }));
+      setLoading(false);
+      setLastRefresh(
+        new Date().toLocaleTimeString("en-GB", {
+          timeZone: "Europe/London",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
     }
   }, []);
 
-  const fetchWeather = useCallback(async () => {
-    try {
-      const res = await fetch("/api/weather");
-      const json = await res.json();
-      setWeather(json);
-    } catch {}
-  }, []);
-
   useEffect(() => {
-    fetchAll();
-    fetchWeather();
-    const interval = setInterval(fetchAll, 10000);
-    const weatherInterval = setInterval(fetchWeather, 900000); // 15 min
-    return () => { clearInterval(interval); clearInterval(weatherInterval); };
-  }, [fetchAll, fetchWeather]);
-
-  const overallStatus = health.some(h => h.status === "critical") ? "critical"
-    : health.some(h => h.status === "warning") ? "warning"
-    : health.some(h => h.status === "healthy") ? "healthy"
-    : health.length === 0 || health.every(h => h.status === "unknown") ? "unknown"
-    : "healthy";
-  const onlineAgents = agents.filter(a => a.online).length;
-  const criticalAlerts = alerts.filter(a => a.severity === "critical").length;
+    fetchDeck();
+    const interval = setInterval(fetchDeck, 15000);
+    return () => clearInterval(interval);
+  }, [fetchDeck]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header with greeting + clock */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">{greeting()}, Mark</h1>
-          <p className="text-xs text-text-muted mt-0.5">Mission Control - Last refresh: {lastRefresh}</p>
-        </div>
-        <LiveClock />
-      </div>
+    <div className="space-y-6 animate-fade-in scanline-overlay">
+      <section className="mc-card radar-sweep overflow-hidden border-mint/20 bg-[linear-gradient(135deg,rgba(94,186,160,0.08),rgba(6,13,10,0.96)_38%,rgba(12,26,20,0.98))] px-5 py-5 lg:px-6 lg:py-6">
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-mint">
+                <span className="h-2 w-2 rounded-full bg-mint ambient-ping" />
+                Home / Command Deck
+              </div>
+              <Link 
+                href="/alerts" 
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-all",
+                  payload.runtime.overall === "healthy" 
+                    ? "border-mint/20 bg-mint/10 text-mint-bright" 
+                    : "border-status-critical/30 bg-status-critical/10 text-status-critical animate-pulse"
+                )}
+              >
+                <TriangleAlert size={13} />
+                System Alerts
+              </Link>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-text-primary lg:text-3xl">
+              {greeting()}, Mark
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary lg:text-[15px]">
+              {missionNarrative(payload)}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <SignalPill icon={<Radar size={13} />} label={`${payload.taskSummary.active} active`} />
+              <SignalPill icon={<TriangleAlert size={13} />} label={`${payload.needsMark.length} waiting on Mark`} tone={payload.needsMark.length > 0 ? "warning" : "neutral"} />
+              <SignalPill icon={<Bot size={13} />} label={`${payload.runtime.onlineAgents}/${payload.agents.length || 0} agents visible`} />
+              <SignalPill icon={<ShieldCheck size={13} />} label={`${payload.proofFeed.total} proof traces`} tone="violet" />
+            </div>
+          </div>
 
-      {/* Critical alerts banner */}
-      {criticalAlerts > 0 && (
-        <div className="bg-status-critical/10 border border-status-critical/30 rounded-lg p-3 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-status-critical flex-shrink-0" />
-          <span className="text-sm text-status-critical font-medium">{criticalAlerts} critical alert{criticalAlerts > 1 ? "s" : ""} requiring attention</span>
+          <div className={cn("relative z-10 min-w-[250px] rounded-xl border p-4", runtimeAccent(payload.runtime.overall))}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-text-muted">Runtime / Health</div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn("h-2.5 w-2.5 rounded-full", healthDotClass(payload.runtime.overall === "healthy" ? "healthy" : payload.runtime.overall === "warning" ? "warning" : payload.runtime.overall === "critical" ? "critical" : "unknown"))} />
+                  <StatusBadge status={payload.runtime.overall} label={payload.runtime.overall} />
+                </div>
+              </div>
+              <Wifi className="text-text-muted" size={16} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <RuntimeCell label="Online" value={String(payload.runtime.onlineAgents)} />
+              <RuntimeCell label="Stale" value={String(payload.runtime.staleAgents)} warning={payload.runtime.staleAgents > 0} />
+              <RuntimeCell label="Blocked" value={String(payload.runtime.blockedTasks)} critical={payload.runtime.blockedTasks > 0} />
+              <RuntimeCell label="Approvals" value={String(payload.runtime.approvalsWaiting)} warning={payload.runtime.approvalsWaiting > 0} />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between text-xs text-text-muted">
+              <span>Refresh {lastRefresh}</span>
+              <span>{relativeTime(payload.generatedAt)}</span>
+            </div>
+          </div>
         </div>
+      </section>
+
+      {payload.needsMark.length > 0 && (
+        <section className="needs-mark-banner rounded-xl border px-4 py-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-lg border border-status-warning/30 bg-status-warning/15 p-2">
+                <AlertTriangle size={16} className="text-status-warning" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-text-primary">
+                  Mark is needed on {payload.needsMark.length} item{payload.needsMark.length === 1 ? "" : "s"}
+                </div>
+                <div className="text-xs text-text-secondary">
+                  Approvals and blockers are separated here so the important stuff floats up fast.
+                </div>
+              </div>
+            </div>
+            <Link href="/command" className="inline-flex items-center gap-2 text-xs font-medium text-mint hover:text-mint-bright">
+              Open command view
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        </section>
       )}
 
-      {/* Warning alerts */}
-      {alerts.filter(a => a.severity === "warning").map(alert => (
-        <div key={alert.id} className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-3 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-status-warning flex-shrink-0" />
-          <span className="text-sm text-status-warning">{alert.message}</span>
-          <span className="ml-auto text-xs text-text-muted">{relativeTime(alert.created_at)}</span>
-        </div>
-      ))}
+      <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <MetricCard
+          icon={<CheckSquare size={16} className="text-mint" />}
+          label="What matters now"
+          value={String(payload.taskSummary.active)}
+          sub={`${payload.taskSummary.blocked} blocked · ${payload.taskSummary.queued} queued`}
+          accent="mint"
+        />
+        <MetricCard
+          icon={<Bot size={16} className="text-cyan-300" />}
+          label="Agent presence"
+          value={`${payload.runtime.onlineAgents}/${payload.agents.length}`}
+          sub={`${payload.runtime.staleAgents} stale signals`}
+          accent="cyan"
+        />
+        <MetricCard
+          icon={<TriangleAlert size={16} className="text-status-warning" />}
+          label="Needs Mark"
+          value={String(payload.needsMark.length)}
+          sub={`${payload.runtime.approvalsWaiting} approvals waiting`}
+          accent="warning"
+          valueClass={payload.needsMark.length > 0 ? "text-status-warning" : undefined}
+        />
+        <MetricCard
+          icon={<ShieldCheck size={16} className="proof-violet" />}
+          label="Proof / outputs"
+          value={String(payload.proofFeed.total)}
+          sub={payload.proofFeed.hasMore ? `showing 6 most recent` : `${payload.taskSummary.pendingTodo} TODOs pending`}
+          accent="violet"
+        />
+      </section>
 
-      {/* Top row: weather + approval queue + MRR + days to goal */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Weather */}
-        <div className="mc-card p-4">
-          {weather && !weather.error ? (
-            <>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">{weather.icon}</span>
-                <span className="text-xs text-text-muted">Clacton-on-Sea</span>
-              </div>
-              <div className="text-2xl font-mono font-semibold text-text-primary">{weather.temp}°C</div>
-              <div className="text-xs text-text-muted mt-0.5">{weather.desc}</div>
-              <div className="text-xs text-text-muted mt-0.5">Feels {weather.feelsLike}°C · {weather.windKmph}km/h</div>
-            </>
-          ) : (
-            <>
-              <div className="text-xs text-text-muted mb-1">Weather</div>
-              <div className="text-sm text-text-secondary">Loading...</div>
-            </>
-          )}
-        </div>
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="space-y-4 xl:col-span-5">
+          <Card
+            title="Top mission"
+            subtitle="The priorities that actually matter right now"
+            className="card-glow-fresh"
+          >
+            <div className="space-y-3">
+              {payload.priorities.map((priority, index) => {
+                const fresh = isFreshPriority(priority.updatedAt);
+                return (
+                  <div
+                    key={priority.id}
+                    className={cn(
+                      "rounded-xl border border-bg-border bg-[linear-gradient(135deg,rgba(255,255,255,0.02),transparent)] p-4 transition-all",
+                      priorityCardClass(priority.status),
+                      fresh && "card-glow-fresh"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {index === 0 && <Sparkles size={14} className="text-mint flex-shrink-0" />}
+                          <div className="text-sm font-semibold text-text-primary">{priority.title}</div>
+                        </div>
+                        <div className="mt-1 text-xs text-text-muted">
+                          {priority.owner || "Unassigned"} · {relativeTime(priority.updatedAt)}
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={priority.status === "execution" ? "healthy" : priority.status === "blocked" ? "critical" : "warning"}
+                        label={statusLabel(priority.status)}
+                      />
+                    </div>
 
-        {/* Approval queue */}
-        <div className="mc-card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-text-muted uppercase tracking-wide">Approval Queue</span>
-          </div>
-          <div className={cn("text-2xl font-mono font-semibold", propCounts.pending > 0 ? "text-status-warning" : "text-status-healthy")}>
-            {propCounts.pending}
-          </div>
-          <div className="text-xs text-text-muted mt-0.5">proposals pending</div>
-          {propCounts.pending > 0 && (
-            <Link href="/command" className="text-xs text-mint hover:underline mt-1 block">Review â†'</Link>
-          )}
-        </div>
-
-        {/* MRR */}
-        <div className="mc-card p-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-text-muted uppercase tracking-wide">MRR</span>
-            {!editingMrr ? (
-              <button onClick={() => { setMrrInput(String(mrr)); setEditingMrr(true); }} className="text-text-muted hover:text-mint transition-colors">
-                <Edit2 size={10} />
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <button onClick={saveMrr} className="text-status-healthy hover:text-status-healthy/80"><Check size={10} /></button>
-                <button onClick={() => setEditingMrr(false)} className="text-text-muted hover:text-status-critical"><X size={10} /></button>
-              </div>
-            )}
-          </div>
-          {editingMrr ? (
-            <input
-              type="number"
-              value={mrrInput}
-              onChange={e => setMrrInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && saveMrr()}
-              autoFocus
-              className="w-full bg-bg-border rounded px-2 py-1 text-sm font-mono text-mint focus:outline-none focus:border-mint/40 border border-bg-border"
-            />
-          ) : (
-            <div className="text-2xl font-mono font-semibold text-mint">
-              £{mrr.toLocaleString("en-GB")}
+                    <div className="mt-3 text-sm leading-6 text-text-secondary">{priority.whyNow}</div>
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-mint">
+                      <ArrowRight size={12} />
+                      Next move: {priority.action}
+                    </div>
+                  </div>
+                );
+              })}
+              {payload.priorities.length === 0 && <EmptyState text="No active priorities found on the board." />}
             </div>
-          )}
-          <div className="text-xs text-text-muted mt-0.5">monthly recurring</div>
+          </Card>
+
+          <Card title="Recent activity feed" subtitle="Real movement, visible proof, no dashboard theatre">
+            <div className="space-y-2">
+              {payload.activity.map((item) => {
+                const fresh = isRecentActivity(item.timestamp);
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "rounded-xl border border-bg-border bg-bg-card/70 px-3 py-3",
+                      fresh && "card-glow-fresh"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className={cn(
+                          "mt-1.5 h-2.5 w-2.5 rounded-full flex-shrink-0",
+                          item.needsMark
+                            ? "bg-status-warning status-pulse-warning"
+                            : item.type === "proof"
+                              ? "proof-violet-bg border proof-violet"
+                              : "bg-status-healthy live-dot"
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm leading-6 text-text-primary">{item.message}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+                          <span>{item.source}</span>
+                          <span className="text-bg-border">•</span>
+                          <span className={cn(fresh ? "timestamp-fresh" : "timestamp-stale")}>{relativeTime(item.timestamp)}</span>
+                          {item.needsMark && (
+                            <span className="rounded-full border border-status-warning/30 bg-status-warning/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-status-warning">
+                              needs Mark
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {payload.activity.length === 0 && <EmptyState text="No recent activity yet." />}
+            </div>
+          </Card>
         </div>
 
-        {/* Days to goal */}
-        <div className="mc-card p-4">
-          <div className="text-xs text-text-muted uppercase tracking-wide mb-2">Days to Goal</div>
-          <div className="text-2xl font-mono font-semibold text-mint">{daysToGoal}</div>
-          <div className="text-xs text-text-muted mt-0.5">until {new Date(GOAL_DATE).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}</div>
-          {todoCounts.high > 0 && (
-            <div className="text-xs text-status-critical mt-0.5">{todoCounts.high} high-pri tasks</div>
-          )}
+        <div className="space-y-4 xl:col-span-4">
+          <Card title="Agent presence" subtitle="Current status, freshness, and visible signs of life">
+            <div className="space-y-3">
+              {payload.agents.map((agent) => {
+                const freshnessMinutes = agent.freshnessMinutes;
+                const freshness =
+                  freshnessMinutes === null ? "stale" : freshnessMinutes <= 10 ? "fresh" : freshnessMinutes <= 60 ? "recent" : "stale";
+                return (
+                  <div
+                    key={agent.id}
+                    className={cn(
+                      "rounded-xl border border-bg-border p-4",
+                      freshness === "fresh" && "agent-tile-fresh card-glow-fresh",
+                      freshness === "stale" && "bg-status-critical/5",
+                      freshness === "recent" && "bg-bg-card/70"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("h-2.5 w-2.5 rounded-full", healthDotClass(agent.health))} />
+                          <div className="text-sm font-semibold text-text-primary">{agent.name}</div>
+                        </div>
+                        <div className="mt-1 text-xs text-text-muted">{agent.role}</div>
+                      </div>
+                      <StatusBadge status={agent.health} label={statusLabel(agent.status)} />
+                    </div>
+
+                    <div className="mt-3 rounded-lg border border-bg-border/80 bg-black/10 px-3 py-2.5 text-xs leading-5 text-text-secondary">
+                      {agent.currentTask || "No active task recorded"}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 text-text-muted">
+                        <Clock3 size={12} />
+                        <span className={cn(freshness === "stale" ? "text-status-warning" : "text-text-muted")}>
+                          {agent.freshnessLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-text-muted">
+                        <ShieldCheck size={12} className="proof-violet" />
+                        <span>{agent.proofCount} proof</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <Card title="Proof feed summary" subtitle="Latest tangible outputs from the system">
+            <div className="space-y-2">
+              {payload.proofFeed.latest.map((item, index) => {
+                const fresh = index < 2;
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "rounded-xl border px-3 py-3",
+                      "proof-violet-bg",
+                      fresh && "card-glow-fresh"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-lg border border-violet-400/30 bg-violet-400/10 p-2">
+                        <FileText size={14} className="proof-violet" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-text-primary">{item.title}</div>
+                        <div className="mt-1 text-xs text-text-muted">
+                          {item.relatedTo} · {relativeTime(item.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {payload.proofFeed.latest.length === 0 && <EmptyState text="No proof artifacts found yet." />}
+            </div>
+          </Card>
         </div>
-      </div>
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<Activity size={18} className="text-mint" />} label="System" value={overallStatus} valueClass={overallStatus === "healthy" ? "text-status-healthy" : overallStatus === "warning" ? "text-status-warning" : "text-status-critical"} sub={`${health.length} components`} />
-        <KpiCard icon={<Bot size={18} className="text-mint" />} label="Agents Online" value={`${onlineAgents}/${agents.length}`} valueClass="text-text-primary" sub="heartbeat active" />
-        <KpiCard icon={<CheckSquare size={18} className="text-mint" />} label="Active Tasks" value={String(taskCounts.active)} valueClass="text-text-primary" sub={`${taskCounts.blocked} blocked`} />
-        <KpiCard icon={<TrendingUp size={18} className="text-mint" />} label="Alerts" value={String(alerts.length)} valueClass={alerts.length > 0 ? "text-status-warning" : "text-text-primary"} sub={`${criticalAlerts} critical`} />
-      </div>
-
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* System Health */}
-        <Card title="System Health" subtitle="Percy monitoring" action={<Link href="/health" className="text-xs text-mint hover:underline">View all</Link>}>
-          <div className="space-y-2">
-            {health.slice(0, 6).map(h => (
-              <div key={h.id} className="flex items-center justify-between py-1 border-b border-bg-border last:border-0">
-                <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full flex-shrink-0", statusDot(h.status))} />
-                  <span className="text-xs text-text-primary truncate max-w-[140px]">{h.component}</span>
-                </div>
-                <span className="text-xs text-text-muted">{relativeTime(h.last_checked)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Agent Status */}
-        <Card title="Agent Status" subtitle="Live heartbeats" action={<Link href="/agents" className="text-xs text-mint hover:underline">View all</Link>}>
-          <div className="space-y-2">
-            {agents.map(agent => (
-              <div key={agent.id} className="flex items-center justify-between py-1 border-b border-bg-border last:border-0">
-                <div className="flex items-center gap-2">
-                  <span className={cn("w-2 h-2 rounded-full flex-shrink-0", agent.online ? "bg-status-healthy animate-pulse-slow" : "bg-status-unknown")} />
-                  <div>
-                    <span className="text-xs text-text-primary font-medium">{agent.name}</span>
-                    {agent.current_task && <p className="text-xs text-text-muted truncate max-w-[120px]">{agent.current_task}</p>}
+        <div className="space-y-4 xl:col-span-3">
+          <Card
+            title="Needs Mark queue"
+            subtitle="Human intervention only"
+            action={<Link href="/command" className="text-xs text-mint hover:underline">Command</Link>}
+          >
+            <div className="space-y-3">
+              {payload.needsMark.map((item) => (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "rounded-xl border p-4",
+                    item.urgency === "high"
+                      ? "border-status-critical/35 bg-status-critical/10"
+                      : item.urgency === "medium"
+                        ? "border-status-warning/35 bg-status-warning/10"
+                        : "border-bg-border bg-bg-card/70"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm font-semibold leading-6 text-text-primary">{item.title}</div>
+                    <span className={cn("text-[10px] font-semibold uppercase tracking-[0.22em]", urgencyClass(item.urgency))}>
+                      {item.urgency}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-text-muted">
+                    {item.requestedBy} · {item.category} · {relativeTime(item.createdAt)}
+                  </div>
+                  <div className="mt-3 text-sm leading-6 text-text-secondary">{item.reason}</div>
+                  <div className="mt-3 rounded-lg border border-white/5 bg-black/10 px-3 py-2 text-xs text-mint">
+                    Recommended: {item.recommendedAction}
                   </div>
                 </div>
-                <span className="text-xs text-text-muted">{relativeTime(agent.last_activity)}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Activity Feed */}
-        <Card title="Activity Feed" subtitle="10s refresh" action={<span className="text-xs text-text-muted">{activity.length} events</span>}>
-          <div className="space-y-0">
-            {activity.slice(0, 8).map(ev => (
-              <div key={ev.id} className="flex items-start gap-2 py-1.5 border-b border-bg-border last:border-0">
-                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5", {
-                  "bg-mint": ev.type === "memory",
-                  "bg-status-warning": ev.type === "file",
-                  "bg-status-healthy": ev.type === "deploy",
-                  "bg-text-secondary": ev.type === "system",
-                })} />
-                <div className="min-w-0">
-                  <div className="text-xs text-text-primary truncate">{ev.message}</div>
-                  <div className="text-xs text-text-muted">{relativeTime(ev.timestamp)}</div>
-                </div>
-              </div>
-            ))}
-            {activity.length === 0 && (
-              <div className="py-4 text-xs text-text-muted text-center">No recent activity</div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Token Usage Widget */}
-      <TokenWidget data={tokenData} />
-
-      {/* Cirrus Waitlist Widget */}
-      <WidgetBoundary name="waitlist">
-        <WaitlistWidget />
-      </WidgetBoundary>
-
-      {/* Bottom row: quick links + priorities */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="space-y-4">
-          <Card title="Projects" action={<Link href="/projects" className="text-xs text-mint hover:underline">View all</Link>}>
-            <div className="space-y-2">
-              <QuickLink href="/projects" icon={<FolderOpen size={14} />} label="Cirrus" sub="MVP 65% complete" />
-              <QuickLink href="/projects" icon={<FolderOpen size={14} />} label="AMC DUC App" sub="v1 live · v2 planning" />
-              <QuickLink href="/projects" icon={<FolderOpen size={14} />} label="Mission Control v2" sub="Phase 2 — live!" />
+              ))}
+              {payload.needsMark.length === 0 && <EmptyState text="Nothing needs Mark right now." />}
             </div>
           </Card>
-          <Card title="Quick Actions">
-            <div className="space-y-2">
-              <QuickLink href="/command" icon={<AlertTriangle size={14} />} label="Command Center" sub={`${propCounts.pending} proposals pending`} />
-              <QuickLink href="/todo" icon={<CheckSquare size={14} />} label="Todo" sub={`${todoCounts.pending} pending · ${todoCounts.high} high pri`} />
-              <QuickLink href="/pipeline" icon={<TrendingUp size={14} />} label="Opportunity Pipeline" sub="Irene · Ernie · Atlas" />
+
+          <Card title="Runtime snapshot" subtitle="Fast system read at a glance">
+            <div className="space-y-3">
+              <RuntimeStrip label="System state" value={payload.runtime.overall} status={payload.runtime.overall} />
+              <RuntimeStrip label="Live agents" value={`${payload.runtime.onlineAgents}/${payload.agents.length}`} />
+              <RuntimeStrip label="Blocked tasks" value={String(payload.runtime.blockedTasks)} status={payload.runtime.blockedTasks > 0 ? "critical" : "healthy"} />
+              <RuntimeStrip label="Approvals waiting" value={String(payload.runtime.approvalsWaiting)} status={payload.runtime.approvalsWaiting > 0 ? "warning" : "healthy"} />
+              <RuntimeStrip label="Board refresh" value={relativeTime(payload.generatedAt)} />
             </div>
           </Card>
         </div>
+      </section>
 
-        <div className="space-y-4">
-          {/* Priorities from TODO */}
-          <Card title="Priorities" subtitle="From TODO.md — high priority" action={<Link href="/todo" className="text-xs text-mint hover:underline">Full list</Link>}>
-            <PrioritiesList />
-          </Card>
-          {/* Reddit Feed */}
-          <Card title="Reddit" subtitle="Top posts · editable subreddit">
-            <RedditFeed />
-          </Card>
-        </div>
-      </div>
+      {loading && <div className="text-xs text-text-muted">Loading command deck…</div>}
     </div>
   );
 }
 
-function PrioritiesList() {
-  const [items, setItems] = useState<Array<{ id: string; text: string; done: boolean; priority: string }>>([]);
-
-  useEffect(() => {
-    fetch("/api/workspace/todo").then(r => r.json()).then(json => {
-      const high = (json.data || []).filter((i: any) => i.priority === "high" && !i.done).slice(0, 6);
-      setItems(high);
-    }).catch(() => {});
-  }, []);
-
-  if (items.length === 0) {
-    return <div className="py-4 text-xs text-text-muted text-center">No high-priority tasks or TODO.md not found</div>;
-  }
-
-  return (
-    <div className="space-y-0">
-      {items.map(item => (
-        <div key={item.id} className="flex items-center gap-2 py-2 border-b border-bg-border last:border-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-status-critical flex-shrink-0" />
-          <span className="text-xs text-text-primary">{item.text}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-
-function TokenWidget({ data }: { data: TokenData | null }) {
-  if (!data) return null;
-  const top2agents = (data.by_agent || []).slice(0, 2);
-  const agentSummary = top2agents.map(a => `${a.agent.charAt(0).toUpperCase() + a.agent.slice(1)} ${fmtTokens(a.tokens_total)}`).join(" · ");
+function MetricCard({
+  icon,
+  label,
+  value,
+  sub,
+  valueClass,
+  accent,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+  valueClass?: string;
+  accent?: "mint" | "warning" | "violet" | "cyan";
+}) {
+  const accentClass =
+    accent === "warning"
+      ? "border-status-warning/25 bg-[linear-gradient(135deg,rgba(243,156,18,0.12),rgba(16,30,23,0.9))]"
+      : accent === "violet"
+        ? "border-violet-400/25 bg-[linear-gradient(135deg,rgba(167,139,250,0.12),rgba(16,30,23,0.9))]"
+        : accent === "cyan"
+          ? "border-cyan-400/25 bg-[linear-gradient(135deg,rgba(34,211,238,0.10),rgba(16,30,23,0.9))]"
+          : "border-mint/25 bg-[linear-gradient(135deg,rgba(94,186,160,0.12),rgba(16,30,23,0.9))]";
 
   return (
-    <div className="mc-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Zap size={14} className="text-mint" />
-            <span className="text-sm font-medium text-text-primary">Token Usage</span>
-          </div>
-          <div className="text-xs text-text-muted mt-0.5">Today · Real data</div>
-        </div>
-        <Link href="/tokens" className="text-xs text-mint hover:underline">Full breakdown â†'</Link>
-      </div>
-
-      {data.partial && (
-        <div className="text-xs text-yellow-400 mb-2">âš ï¸ Partial data</div>
-      )}
-
-      <div className="space-y-2">
-        {data.today?.tokens_total > 0 ? (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted w-4">â-¸</span>
-              <span className="text-xs text-text-primary font-mono">
-                {fmtTokens(data.today.tokens_total)} tokens · ${data.today.cost_usd.toFixed(4)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted w-4">â-¸</span>
-              <span className="text-xs text-text-secondary">
-                {data.today.most_expensive_session
-                  ? `Most expensive: ${data.today.most_expensive_session.agent} $${data.today.most_expensive_session.cost_usd.toFixed(4)}`
-                  : "Most expensive: None yet"}
-              </span>
-            </div>
-            {agentSummary && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-text-muted w-4">â-¸</span>
-                <span className="text-xs text-text-secondary">{agentSummary}</span>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-xs text-text-muted">No session data yet today</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({ icon, label, value, valueClass, sub }: { icon: React.ReactNode; label: string; value: string; valueClass: string; sub: string }) {
-  return (
-    <div className="mc-card p-4">
-      <div className="flex items-center gap-2 mb-2">
+    <div className={cn("mc-card metric-card-hover p-4", accentClass)}>
+      <div className="mb-2 flex items-center gap-2">
         {icon}
-        <span className="text-xs text-text-muted uppercase tracking-wide">{label}</span>
+        <span className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{label}</span>
       </div>
-      <div className={cn("text-2xl font-semibold font-mono", valueClass)}>{value}</div>
-      <div className="text-xs text-text-muted mt-1">{sub}</div>
+      <div className={cn("font-mono text-3xl font-semibold text-text-primary", valueClass)}>{value}</div>
+      <div className="mt-1 text-xs text-text-secondary">{sub}</div>
     </div>
   );
 }
 
-function QuickLink({ href, icon, label, sub }: { href: string; icon: React.ReactNode; label: string; sub: string }) {
+function EmptyState({ text }: { text: string }) {
+  return <div className="py-4 text-center text-xs text-text-muted">{text}</div>;
+}
+
+function RuntimeCell({
+  label,
+  value,
+  warning,
+  critical,
+}: {
+  label: string;
+  value: string;
+  warning?: boolean;
+  critical?: boolean;
+}) {
   return (
-    <Link href={href} className="flex items-center gap-2 p-2 rounded hover:bg-bg-border transition-colors group">
-      <span className="text-text-muted group-hover:text-mint transition-colors">{icon}</span>
-      <div>
-        <div className="text-xs text-text-primary">{label}</div>
-        <div className="text-xs text-text-muted">{sub}</div>
+    <div className="rounded-lg border border-white/5 bg-black/10 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">{label}</div>
+      <div className={cn("mt-1 text-sm font-semibold", critical ? "text-status-critical" : warning ? "text-status-warning" : "text-text-primary")}>
+        {value}
       </div>
-    </Link>
+    </div>
   );
 }
 
-interface RedditPost { id: string; title: string; score: number; author: string; url: string; created_utc: number; }
-
-function RedditFeed() {
-  const [subreddit, setSubreddit] = useState<string>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("mc_subreddit") || "quittingvaping";
-    return "quittingvaping";
-  });
-  const [input, setInput] = useState(subreddit);
-  const [posts, setPosts] = useState<RedditPost[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/reddit-feed?subreddit=${subreddit}`)
-      .then(r => r.json())
-      .then(data => { setPosts(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [subreddit]);
-
-  const handleChange = () => {
-    const val = input.replace(/^r\//, "").trim();
-    if (val) {
-      setSubreddit(val);
-      if (typeof window !== "undefined") localStorage.setItem("mc_subreddit", val);
-    }
-  };
+function SignalPill({
+  icon,
+  label,
+  tone = "neutral",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  tone?: "neutral" | "warning" | "violet";
+}) {
+  const toneClass =
+    tone === "warning"
+      ? "border-status-warning/30 bg-status-warning/10 text-status-warning"
+      : tone === "violet"
+        ? "border-violet-400/30 bg-violet-400/10 proof-violet"
+        : "border-mint/20 bg-mint/10 text-mint-bright";
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-text-muted">r/</span>
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleChange()}
-          className="bg-bg-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none w-40"
-        />
-        <button onClick={handleChange} className="text-xs text-mint hover:underline">Go</button>
-      </div>
-      {loading && <div className="text-xs text-text-muted">Loading...</div>}
-      {!loading && posts.length === 0 && <div className="text-xs text-text-muted">No posts found or subreddit not accessible</div>}
-      <div className="space-y-0">
-        {posts.map((p, i) => (
-          <div key={p.id} className="flex items-start gap-2 py-2 border-b border-bg-border last:border-0">
-            <span className="text-xs text-text-muted w-5 flex-shrink-0">{i + 1}.</span>
-            <div className="flex-1 min-w-0">
-              <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-xs text-text-primary hover:text-mint line-clamp-2">{p.title}</a>
-              <div className="text-xs text-text-muted mt-0.5">â-² {p.score} · u/{p.author}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs", toneClass)}>
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function RuntimeStrip({ label, value, status }: { label: string; value: string; status?: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-bg-border bg-bg-card/70 px-3 py-2.5">
+      <span className="text-xs text-text-muted">{label}</span>
+      <span
+        className={cn(
+          "text-xs font-semibold uppercase tracking-[0.16em]",
+          status === "critical"
+            ? "text-status-critical"
+            : status === "warning"
+              ? "text-status-warning"
+              : status === "healthy"
+                ? "text-mint-bright"
+                : "text-text-primary"
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
