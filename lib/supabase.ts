@@ -39,15 +39,30 @@ export interface TaskRow {
   updated_at: string;
 }
 
+export interface ProjectMetricRow {
+  label: string;
+  value: string;
+}
+
 export interface ProjectRow {
   id: string;
   name: string;
   category: "Active" | "Paused" | "Archived";
-  current_milestone: string;
-  milestone_progress: number;
   summary: string;
-  risk_level: "low" | "medium" | "high";
+  path: string | null;
+  path_exists: boolean;
+  repo_exists: boolean;
   last_updated: string;
+  repo_last_commit_at: string | null;
+  repo_branch: string | null;
+  open_tasks: number;
+  queued_tasks: number;
+  blocked_tasks: number;
+  completed_tasks: number;
+  latest_task_title: string | null;
+  source_labels: string[];
+  notes: string[];
+  metrics: ProjectMetricRow[];
 }
 
 export interface AlertRow {
