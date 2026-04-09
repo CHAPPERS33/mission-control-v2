@@ -5,6 +5,20 @@ import { Card } from "@/components/ui/Card";
 import { relativeTime, cn } from "@/lib/utils";
 import { RefreshCw, Send, Plus, Check, X, Trash2 } from "lucide-react";
 
+interface ProposalDispatch {
+  status: "queued" | "sent" | "failed";
+  requestedAt: string;
+  attemptedAt?: string;
+  completedAt?: string;
+  command?: string;
+  targetAgent?: string;
+  targetSessionId?: string;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+}
+
 interface Proposal {
   id: string;
   task: string;
@@ -13,6 +27,7 @@ interface Proposal {
   createdAt: string;
   updatedAt: string;
   notes?: string;
+  dispatch?: ProposalDispatch;
 }
 
 interface Decision {
@@ -88,11 +103,18 @@ export default function CommandPage() {
   };
 
   const updateProposal = async (id: string, status: "approved" | "rejected") => {
-    await fetch("/api/proposals", {
+    const res = await fetch("/api/proposals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update", id, updates: { status } }),
     });
+
+    if (!res.ok) {
+      const payload = await res.json().catch(() => null);
+      const message = payload?.dispatch?.error || payload?.error || `Failed to ${status} proposal`;
+      window.alert(message);
+    }
+
     await fetchAll();
   };
 
@@ -189,10 +211,16 @@ export default function CommandPage() {
             <div key={p.id} className="flex items-start justify-between py-3 border-b border-bg-border last:border-0 gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-text-primary">{p.task}</div>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-text-muted">→ {p.agent}</span>
                   {p.notes && <span className="text-xs text-text-muted">· {p.notes}</span>}
                   <span className="text-xs text-text-muted">· {relativeTime(p.createdAt)}</span>
+                  {p.dispatch?.status === "sent" && (
+                    <span className="text-xs text-status-healthy">· dispatched to {p.dispatch.targetAgent}{p.dispatch.targetSessionId ? ` (${p.dispatch.targetSessionId})` : ""}</span>
+                  )}
+                  {p.dispatch?.status === "failed" && (
+                    <span className="text-xs text-status-critical">· dispatch failed: {p.dispatch.error || "unknown error"}</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">

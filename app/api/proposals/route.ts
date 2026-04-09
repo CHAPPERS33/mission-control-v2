@@ -1,38 +1,11 @@
-// DISPATCH GAP: The approve action in the Command Center updates proposal status in proposals.json
-// but does NOT dispatch to any agent. Dispatching requires sessions_send to the agent's live
-// session key, which requires OpenClaw gateway API access not currently exposed to Mission Control.
-// Until a /api/gateway/sessions-send endpoint exists, dispatch remains manual (via Bert on Telegram).
-
 import { NextResponse } from "next/server";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
-
-const PROPOSALS_FILE = join(
-  process.env.USERPROFILE || process.env.HOME || "C:/Users/mccha",
-  ".openclaw/workspace/proposals.json"
-);
-
-interface Proposal {
-  id: string;
-  task: string;
-  agent: string;
-  status: "pending" | "approved" | "rejected";
-  createdAt: string;
-  updatedAt: string;
-  notes?: string;
-}
-
-function loadProposals(): Proposal[] {
-  try {
-    return JSON.parse(readFileSync(PROPOSALS_FILE, "utf-8"));
-  } catch {
-    return [];
-  }
-}
-
-function saveProposals(proposals: Proposal[]) {
-  writeFileSync(PROPOSALS_FILE, JSON.stringify(proposals, null, 2));
-}
+import {
+  dispatchProposal,
+  loadProposals,
+  normalizeAgent,
+  Proposal,
+  saveProposals,
+} from "@/lib/proposal-dispatch";
 
 export async function GET() {
   const proposals = loadProposals();
@@ -52,10 +25,15 @@ export async function POST(req: Request) {
   const proposals = loadProposals();
 
   if (body.action === "add") {
+    const normalizedAgent = normalizeAgent(body.agent || "bert");
+    if (!normalizedAgent) {
+      return NextResponse.json({ error: `Unknown agent: ${body.agent}` }, { status: 400 });
+    }
+
     const newProposal: Proposal = {
       id: `prop-${Date.now()}`,
       task: body.task || "",
-      agent: body.agent || "bert",
+      agent: normalizedAgent,
       status: "pending",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -69,7 +47,48 @@ export async function POST(req: Request) {
   if (body.action === "update") {
     const idx = proposals.findIndex(p => p.id === body.id);
     if (idx === -1) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    proposals[idx] = { ...proposals[idx], ...body.updates, updatedAt: new Date().toISOString() };
+
+    const nextStatus = body.updates?.status;
+    const updatedAt = new Date().toISOString();
+    const nextAgent = body.updates?.agent ? normalizeAgent(body.updates.agent) : proposals[idx].agent;
+
+    if (body.updates?.agent && !nextAgent) {
+      return NextResponse.json({ error: `Unknown agent: ${body.updates.agent}` }, { status: 400 });
+    }
+
+    const candidate: Proposal = {
+      ...proposals[idx],
+      ...body.updates,
+      agent: nextAgent,
+      updatedAt,
+    };
+
+    if (nextStatus === "approved" && proposals[idx].status !== "approved") {
+      const dispatch = await dispatchProposal(candidate);
+      candidate.dispatch = dispatch;
+      proposals[idx] = candidate;
+      saveProposals(proposals);
+
+      if (dispatch.status !== "sent") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Approval saved but agent dispatch failed",
+            data: proposals[idx],
+            dispatch,
+          },
+          { status: 502 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: proposals[idx],
+        dispatch,
+      });
+    }
+
+    proposals[idx] = candidate;
     saveProposals(proposals);
     return NextResponse.json({ success: true, data: proposals[idx] });
   }
